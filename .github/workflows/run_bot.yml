@@ -18,3 +18,11 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          
+      - name: Commit signal log
+    run: |
+          git config --global user.name "trading-bot"
+          git config --global user.email "actions@github.com"
+          git add signal_log.csv
+          git diff --staged --quiet && echo "No changes to log" || git commit -m "Update signal log"
+          git push

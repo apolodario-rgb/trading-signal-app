@@ -10,7 +10,19 @@ my_email = "apolodario@gmail.com"
 
 tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA"]
 
-alert_messages = []
+alert_messages = []  
+
+import csv
+        from datetime import datetime
+
+        log_file = "signal_log.csv"
+        file_exists = os.path.isfile(log_file)
+
+        with open(log_file, "a", newline="") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["date", "symbol", "signal", "price", "average_5day"])
+            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), symbol, final, round(latest_price, 2), round(latest_average, 2)])
 
 for symbol in tickers:
     stock = yf.Ticker(symbol)

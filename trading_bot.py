@@ -67,10 +67,23 @@ for symbol in tickers:
     print(symbol + ": " + final + " (price: $" + str(round(latest_price, 2)) + ", news: " + str(positive_count) + "+/" + str(negative_count) + "-)")
 
     if "STRONG" in final:
-        alert_messages.append(symbol + ": " + final + " at $" + str(round(latest_price, 2)))
+        price_rounded = str(round(latest_price, 2))
+        average_rounded = str(round(latest_average, 2))
+
+        if final == "STRONG BUY":
+            action_text = "Consider BUYING now. Watch to SELL if price rises well above the 5-day average ($" + average_rounded + "), or if it drops back below it."
+        else:
+            action_text = "Consider SELLING now if holding. Watch to BUY again once price rises back above the 5-day average ($" + average_rounded + ")."
+
+        message = symbol + ": " + final + "\n"
+        message += "Current price: $" + price_rounded + "\n"
+        message += "5-day average: $" + average_rounded + "\n"
+        message += "News: " + str(positive_count) + " positive, " + str(negative_count) + " negative headlines\n"
+        message += action_text
+        alert_messages.append(message)
 
 if len(alert_messages) > 0:
-    body = "\n".join(alert_messages)
+    body = "\n\n".join(alert_messages)
     msg = MIMEText(body)
     msg['Subject'] = "Trading Bot Alert: " + str(len(alert_messages)) + " strong signal(s)"
     msg['From'] = my_email

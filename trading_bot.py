@@ -1,6 +1,8 @@
 import yfinance as yf
 import requests
 import os
+import csv
+from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 
@@ -10,19 +12,7 @@ my_email = "apolodario@gmail.com"
 
 tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA"]
 
-alert_messages = []  
-
-import csv
-        from datetime import datetime
-
-        log_file = "signal_log.csv"
-        file_exists = os.path.isfile(log_file)
-
-        with open(log_file, "a", newline="") as f:
-            writer = csv.writer(f)
-            if not file_exists:
-                writer.writerow(["date", "symbol", "signal", "price", "average_5day"])
-            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), symbol, final, round(latest_price, 2), round(latest_average, 2)])
+alert_messages = []
 
 for symbol in tickers:
     stock = yf.Ticker(symbol)
@@ -93,6 +83,15 @@ for symbol in tickers:
         message += "News: " + str(positive_count) + " positive, " + str(negative_count) + " negative headlines\n"
         message += action_text
         alert_messages.append(message)
+
+        log_file = "signal_log.csv"
+        file_exists = os.path.isfile(log_file)
+
+        with open(log_file, "a", newline="") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["date", "symbol", "signal", "price", "average_5day"])
+            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), symbol, final, round(latest_price, 2), round(latest_average, 2)])
 
 if len(alert_messages) > 0:
     body = "\n\n".join(alert_messages)

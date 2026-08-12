@@ -16,16 +16,33 @@ alert_messages = []
 
 for symbol in tickers:
     stock = yf.Ticker(symbol)
-    data = stock.history(period="1mo")
+    data = stock.history(period="2mo")
     data['Average_5day'] = data['Close'].rolling(window=5).mean()
+
+    delta = data['Close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    data['RSI'] = 100 - (100 / (1 + rs))
 
     latest_price = data['Close'].iloc[-1]
     latest_average = data['Average_5day'].iloc[-1]
+    latest_rsi = data['RSI'].iloc[-1]
+
+    buy_votes = 0
+    sell_votes = 0
 
     if latest_price > latest_average:
-        signal = "BUY"
+        buy_votes += 1
     else:
-        signal = "SELL"
+        sell_votes += 1
+
+    if latest_rsi < 30:
+        buy_votes += 1
+    elif latest_rsi > 70:
+        sell_votes += 1
 
     news = stock.news
     positive_count = 0
@@ -59,18 +76,24 @@ for symbol in tickers:
         elif "NEGATIVE" in verdict:
             negative_count += 1
 
-    if signal == "BUY" and positive_count > negative_count:
+    if positive_count > negative_count:
+        buy_votes += 1
+    elif negative_count > positive_count:
+        sell_votes += 1
+
+    if buy_votes >= 2:
         final = "STRONG BUY"
-    elif signal == "SELL" and negative_count > positive_count:
+    elif sell_votes >= 2:
         final = "STRONG SELL"
     else:
         final = "HOLD / mixed"
 
-    print(symbol + ": " + final + " (price: $" + str(round(latest_price, 2)) + ", news: " + str(positive_count) + "+/" + str(negative_count) + "-)")
+    print(symbol + ": " + final + " (price: $" + str(round(latest_price, 2)) + ", RSI: " + str(round(latest_rsi, 1)) + ", news: " + str(positive_count) + "+/" + str(negative_count) + "-, votes: " + str(buy_votes) + "buy/" + str(sell_votes) + "sell)")
 
     if "STRONG" in final:
         price_rounded = str(round(latest_price, 2))
         average_rounded = str(round(latest_average, 2))
+        rsi_rounded = str(round(latest_rsi, 1))
 
         if final == "STRONG BUY":
             action_text = "Consider BUYING now. Watch to SELL if price rises well above the 5-day average ($" + average_rounded + "), or if it drops back below it."
@@ -80,7 +103,9 @@ for symbol in tickers:
         message = symbol + ": " + final + "\n"
         message += "Current price: $" + price_rounded + "\n"
         message += "5-day average: $" + average_rounded + "\n"
+        message += "RSI: " + rsi_rounded + "\n"
         message += "News: " + str(positive_count) + " positive, " + str(negative_count) + " negative headlines\n"
+        message += "Votes: " + str(buy_votes) + " buy, " + str(sell_votes) + " sell (out of 3 signals)\n"
         message += action_text
         alert_messages.append(message)
 
@@ -90,8 +115,8 @@ for symbol in tickers:
         with open(log_file, "a", newline="") as f:
             writer = csv.writer(f)
             if not file_exists:
-                writer.writerow(["date", "symbol", "signal", "price", "average_5day"])
-            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), symbol, final, round(latest_price, 2), round(latest_average, 2)])
+                writer.writerow(["date", "symbol", "signal", "price", "average_5day", "rsi", "buy_votes", "sell_votes"])
+            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), symbol, final, round(latest_price, 2), round(latest_average, 2), round(latest_rsi, 1), buy_votes, sell_votes])
 
 if len(alert_messages) > 0:
     body = "\n\n".join(alert_messages)

@@ -81,6 +81,32 @@ for symbol in tickers:
     elif negative_count > positive_count:
         sell_votes += 1
 
+    bullish_count = 0
+    bearish_count = 0
+
+    try:
+        st_response = requests.get(
+            "https://api.stocktwits.com/api/2/streams/symbol/" + symbol + ".json",
+            timeout=10
+        )
+        st_data = st_response.json()
+        messages = st_data.get("messages", [])
+        for msg_item in messages[:30]:
+            sentiment_obj = msg_item.get("entities", {}).get("sentiment")
+            if sentiment_obj:
+                basic = sentiment_obj.get("basic")
+                if basic == "Bullish":
+                    bullish_count += 1
+                elif basic == "Bearish":
+                    bearish_count += 1
+    except Exception as e:
+        print("StockTwits fetch failed for " + symbol + ": " + str(e))
+
+    if bullish_count > bearish_count:
+        buy_votes += 1
+    elif bearish_count > bullish_count:
+        sell_votes += 1
+
     if buy_votes >= 2:
         final = "STRONG BUY"
     elif sell_votes >= 2:
@@ -88,7 +114,7 @@ for symbol in tickers:
     else:
         final = "HOLD / mixed"
 
-    print(symbol + ": " + final + " (price: $" + str(round(latest_price, 2)) + ", RSI: " + str(round(latest_rsi, 1)) + ", news: " + str(positive_count) + "+/" + str(negative_count) + "-, votes: " + str(buy_votes) + "buy/" + str(sell_votes) + "sell)")
+    print(symbol + ": " + final + " (price: $" + str(round(latest_price, 2)) + ", RSI: " + str(round(latest_rsi, 1)) + ", news: " + str(positive_count) + "+/" + str(negative_count) + "-, stocktwits: " + str(bullish_count) + "bull/" + str(bearish_count) + "bear, votes: " + str(buy_votes) + "buy/" + str(sell_votes) + "sell)")
 
     if "STRONG" in final:
         price_rounded = str(round(latest_price, 2))
@@ -105,6 +131,7 @@ for symbol in tickers:
         message += "5-day average: $" + average_rounded + "\n"
         message += "RSI: " + rsi_rounded + "\n"
         message += "News: " + str(positive_count) + " positive, " + str(negative_count) + " negative headlines\n"
+        message += "StockTwits: " + str(bullish_count) + " bullish, " + str(bearish_count) + " bearish posts\n"
         message += "Votes: " + str(buy_votes) + " buy, " + str(sell_votes) + " sell (out of 3 signals)\n"
         message += action_text
         alert_messages.append(message)
@@ -115,8 +142,8 @@ for symbol in tickers:
         with open(log_file, "a", newline="") as f:
             writer = csv.writer(f)
             if not file_exists:
-                writer.writerow(["date", "symbol", "signal", "price", "average_5day", "rsi", "buy_votes", "sell_votes"])
-            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), symbol, final, round(latest_price, 2), round(latest_average, 2), round(latest_rsi, 1), buy_votes, sell_votes])
+                writer.writerow(["date", "symbol", "signal", "price", "average_5day", "rsi", "bullish", "bearish", "buy_votes", "sell_votes"])
+            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), symbol, final, round(latest_price, 2), round(latest_average, 2), round(latest_rsi, 1), bullish_count, bearish_count, buy_votes, sell_votes])
 
 if len(alert_messages) > 0:
     body = "\n\n".join(alert_messages)

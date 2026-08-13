@@ -1,12 +1,16 @@
 name: Trading Signal Bot
 
-# Runs on 4 different schedules at once (5min, 30min, 1hr, 2hr). Each schedule maps to
-# its own TIMEFRAME below, and the bot keeps a completely separate paper portfolio and
-# log files per timeframe, so you can compare later which speed actually performs best.
+# Runs on 6 different schedules at once (5min, 15min, 30min, 45min, 1hr, 2hr). Each
+# schedule maps to its own TIMEFRAME below, and the bot keeps a completely separate paper
+# portfolio and log files per timeframe, so you can compare later which speed actually
+# performs best. GitHub Actions' fastest allowed schedule is every 5 minutes (true 1-minute
+# scheduling isn't supported on the free tier), so 5 minutes is our fastest timeframe.
 on:
   schedule:
     - cron: '*/5 * * * *'    # every 5 minutes
+    - cron: '*/15 * * * *'   # every 15 minutes
     - cron: '*/30 * * * *'   # every 30 minutes
+    - cron: '0,45 * * * *'   # every hour at :00 and :45 (45-minute cadence)
     - cron: '0 * * * *'      # every hour
     - cron: '0 */2 * * *'    # every 2 hours
   workflow_dispatch:
@@ -16,7 +20,7 @@ on:
         required: false
         default: '30MIN'
         type: choice
-        options: ['5MIN', '30MIN', '1HR', '2HR']
+        options: ['5MIN', '15MIN', '30MIN', '45MIN', '1HR', '2HR']
 
 permissions:
   contents: write
@@ -42,8 +46,12 @@ jobs:
             echo "TIMEFRAME=${{ inputs.timeframe }}" >> $GITHUB_ENV
           elif [ "${{ github.event.schedule }}" = "*/5 * * * *" ]; then
             echo "TIMEFRAME=5MIN" >> $GITHUB_ENV
+          elif [ "${{ github.event.schedule }}" = "*/15 * * * *" ]; then
+            echo "TIMEFRAME=15MIN" >> $GITHUB_ENV
           elif [ "${{ github.event.schedule }}" = "*/30 * * * *" ]; then
             echo "TIMEFRAME=30MIN" >> $GITHUB_ENV
+          elif [ "${{ github.event.schedule }}" = "0,45 * * * *" ]; then
+            echo "TIMEFRAME=45MIN" >> $GITHUB_ENV
           elif [ "${{ github.event.schedule }}" = "0 * * * *" ]; then
             echo "TIMEFRAME=1HR" >> $GITHUB_ENV
           elif [ "${{ github.event.schedule }}" = "0 */2 * * *" ]; then

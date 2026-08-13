@@ -37,11 +37,34 @@ PORTFOLIO_STATE_FILE = "portfolio_state_" + TIMEFRAME + ".json"
 PAPER_TRADES_FILE = "paper_trades_" + TIMEFRAME + ".csv"
 PORTFOLIO_HISTORY_FILE = "portfolio_history_" + TIMEFRAME + ".csv"
 
+# ---- Quick profit-taking / stop-loss targets, per timeframe ----
+# Idea: rather than only selling when a fresh STRONG SELL signal happens to fire, each
+# position also sells itself the moment it hits a small profit target for its speed, so
+# the bot banks lots of small wins instead of waiting around for one big one. A stop-loss
+# (roughly half the profit target) protects against a small win turning into a big loss.
+# Faster timeframes use tighter targets (less time for the price to move); slower
+# timeframes use bigger targets (more time/room to move).
+PROFIT_TARGET_PCT = {
+    "5MIN": 0.3,
+    "15MIN": 0.5,
+    "45MIN": 0.8,
+    "1HR": 1.0,
+    "2HR": 1.5,
+}.get(TIMEFRAME, 1.0)
+
+STOP_LOSS_PCT = {
+    "5MIN": 0.2,
+    "15MIN": 0.3,
+    "45MIN": 0.4,
+    "1HR": 0.5,
+    "2HR": 0.8,
+}.get(TIMEFRAME, 0.5)
+
 if os.path.isfile(PORTFOLIO_STATE_FILE):
     with open(PORTFOLIO_STATE_FILE, "r") as f:
         portfolio = json.load(f)
 else:
-    portfolio = {"cash": STARTING_CASH, "positions": {}}  # positions: {symbol: {"shares": x, "avg_price": y}}
+    portfolio = {"cash": STARTING_CASH, "positions": {}}  # positions: {symbol: {"shares": x, "avg_price": y, "bought_at": iso timestamp}}
 
 latest_prices = {}  # symbol -> latest price, collected for every ticker so we can value the whole portfolio later
 
@@ -257,8 +280,15 @@ for symbol in tickers:
                 "https://www.reddit.com/r/stocks/search.json",
                 params={"q": symbol, "restrict_sr": "on", "sort": "new", "limit": 10, "t": "week"},
                 timeout=10,
-                headers={"User-Agent": "trading-signal-bot/1.0"}
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                }
             )
+            if reddit_response.status_code != 200:
+                print("Reddit returned status " + str(reddit_response.status_code) + " for " + symbol
+                      + ". Body preview: " + reddit_response.text[:200])
+                raise ValueError("Reddit non-200 response")
             reddit_data = reddit_response.json()
             posts = reddit_data.get("data", {}).get("children", [])
             for post in posts[:8]:
@@ -320,25 +350,54 @@ for symbol in tickers:
 
     paper_trade_note = None
 
-    if final == "STRONG BUY":
+    # ---- Profit target / stop-loss check, runs FIRST every time, regardless of the fresh
+    # signal above ----
+    # If we're already holding this stock, check whether it has moved far enough (up or
+    # down) to hit this timeframe's quick win target or safety-net stop-loss. This lets the
+    # bot bank small consistent wins fast, instead of only selling when a brand new STRONG
+    # SELL signal happens to fire for the same stock later.
+    already_holding_for_target_check = symbol in portfolio["positions"] and portfolio["positions"][symbol]["shares"] > 0
+    if already_holding_for_target_check:
+        held_for_check = portfolio["positions"][symbol]
+        pct_change = ((latest_price - held_for_check["avg_price"]) / held_for_check["avg_price"]) * 100
+        if pct_change >= PROFIT_TARGET_PCT:
+            proceeds = held_for_check["shares"] * latest_price
+            profit = proceeds - (held_for_check["shares"] * held_for_check["avg_price"])
+            portfolio["cash"] += proceeds
+            paper_trade_note = "SELL " + str(round(held_for_check["shares"], 4)) + " shares at $" + str(round(latest_price, 2)) + " (PROFIT TARGET hit, +" + str(round(pct_change, 2)) + "%, P/L: $" + str(round(profit, 2)) + ")"
+            del portfolio["positions"][symbol]
+        elif pct_change <= -STOP_LOSS_PCT:
+            proceeds = held_for_check["shares"] * latest_price
+            profit = proceeds - (held_for_check["shares"] * held_for_check["avg_price"])
+            portfolio["cash"] += proceeds
+            paper_trade_note = "SELL " + str(round(held_for_check["shares"], 4)) + " shares at $" + str(round(latest_price, 2)) + " (STOP LOSS hit, " + str(round(pct_change, 2)) + "%, P/L: $" + str(round(profit, 2)) + ")"
+            del portfolio["positions"][symbol]
+
+    # Only fall back to signal-based buy/sell if the profit target / stop-loss above didn't
+    # already close out a position this run.
+    if paper_trade_note is None and final == "STRONG BUY":
         already_holding = symbol in portfolio["positions"] and portfolio["positions"][symbol]["shares"] > 0
         if not already_holding and portfolio["cash"] >= POSITION_SIZE:
             shares_bought = POSITION_SIZE / latest_price
             portfolio["cash"] -= POSITION_SIZE
-            portfolio["positions"][symbol] = {"shares": shares_bought, "avg_price": latest_price}
+            portfolio["positions"][symbol] = {
+                "shares": shares_bought,
+                "avg_price": latest_price,
+                "bought_at": datetime.now().isoformat(),
+            }
             paper_trade_note = "BUY " + str(round(shares_bought, 4)) + " shares at $" + str(round(latest_price, 2))
         elif already_holding:
             paper_trade_note = "already holding, no new buy"
         else:
             paper_trade_note = "not enough paper cash to buy"
 
-    elif final == "STRONG SELL":
+    elif paper_trade_note is None and final == "STRONG SELL":
         if symbol in portfolio["positions"] and portfolio["positions"][symbol]["shares"] > 0:
             held = portfolio["positions"][symbol]
             proceeds = held["shares"] * latest_price
             profit = proceeds - (held["shares"] * held["avg_price"])
             portfolio["cash"] += proceeds
-            paper_trade_note = "SELL " + str(round(held["shares"], 4)) + " shares at $" + str(round(latest_price, 2)) + " (P/L: $" + str(round(profit, 2)) + ")"
+            paper_trade_note = "SELL " + str(round(held["shares"], 4)) + " shares at $" + str(round(latest_price, 2)) + " (SIGNAL SELL, P/L: $" + str(round(profit, 2)) + ")"
             del portfolio["positions"][symbol]
         else:
             paper_trade_note = "no position to sell"

@@ -1,9 +1,22 @@
-name: Trading Bot
+name: Trading Signal Bot
 
+# Runs on 4 different schedules at once (5min, 30min, 1hr, 2hr). Each schedule maps to
+# its own TIMEFRAME below, and the bot keeps a completely separate paper portfolio and
+# log files per timeframe, so you can compare later which speed actually performs best.
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '*/5 * * * *'    # every 5 minutes
+    - cron: '*/30 * * * *'   # every 30 minutes
+    - cron: '0 * * * *'      # every hour
+    - cron: '0 */2 * * *'    # every 2 hours
   workflow_dispatch:
+    inputs:
+      timeframe:
+        description: 'Timeframe to run manually'
+        required: false
+        default: '30MIN'
+        type: choice
+        options: ['5MIN', '30MIN', '1HR', '2HR']
 
 permissions:
   contents: write
@@ -12,19 +25,44 @@ jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install yfinance requests
-      - run: python trading_bot.py
+
+      - name: Install dependencies
+        run: pip install yfinance requests
+
+      - name: Determine which timeframe this run is
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "TIMEFRAME=${{ inputs.timeframe }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.schedule }}" = "*/5 * * * *" ]; then
+            echo "TIMEFRAME=5MIN" >> $GITHUB_ENV
+          elif [ "${{ github.event.schedule }}" = "*/30 * * * *" ]; then
+            echo "TIMEFRAME=30MIN" >> $GITHUB_ENV
+          elif [ "${{ github.event.schedule }}" = "0 * * * *" ]; then
+            echo "TIMEFRAME=1HR" >> $GITHUB_ENV
+          elif [ "${{ github.event.schedule }}" = "0 */2 * * *" ]; then
+            echo "TIMEFRAME=2HR" >> $GITHUB_ENV
+          else
+            echo "TIMEFRAME=30MIN" >> $GITHUB_ENV
+          fi
+
+      - name: Run trading bot
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-      - name: Commit signal log
+        run: python trading_bot.py
+
+      - name: Commit updated logs and portfolio state
         run: |
-          git config --global user.name "trading-bot"
-          git config --global user.email "actions@github.com"
-          git add signal_log.csv
-          git diff --staged --quiet && echo "No changes to log" || git commit -m "Update signal log"
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          git add signal_log_*.csv paper_trades_*.csv portfolio_history_*.csv portfolio_state_*.json
+          git diff --staged --quiet || git commit -m "Update logs and paper portfolio (${TIMEFRAME}) [skip ci]"
+          git pull --rebase
           git push

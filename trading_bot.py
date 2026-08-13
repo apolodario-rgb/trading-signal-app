@@ -1,4 +1,5 @@
 import difflib
+import json
 import yfinance as yf
 import requests
 import os
@@ -11,7 +12,38 @@ api_key = os.environ.get("ANTHROPIC_API_KEY")
 gmail_password = os.environ.get("GMAIL_APP_PASSWORD")
 my_email = "apolodario@gmail.com"
 
-tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA"]
+tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMZN", "META", "AMD", "PLTR", "COIN"]
+
+# ---- Timeframe setup ----
+# The same script runs on 4 different schedules (5min, 30min, 1hr, 2hr), set via the
+# TIMEFRAME env var in the workflow. Each timeframe gets its OWN portfolio/log files so
+# we can compare, side by side later, which speed actually performs best.
+TIMEFRAME = os.environ.get("TIMEFRAME", "30MIN")
+
+# The 5-minute run skips the news/Reddit AI classification steps. Running the full
+# Claude-powered pipeline (news + reddit sentiment) across 10 tickers every 5 minutes
+# would mean 100+ API calls every single run, which gets expensive and risks rate limits
+# fast. So the 5-minute bot trades on price/RSI/MACD/Bollinger/StockTwits only (all free,
+# fast data), while the slower timeframes keep the full pipeline. This also mirrors how
+# real fast trading works: quick reactions to price, slower reactions that digest news.
+LITE_MODE = (TIMEFRAME == "5MIN")
+
+# ---- Paper trading (simulated money) config ----
+# The bot "invests" imaginary money whenever it gets a strong signal, so we can track
+# over time whether the strategy actually would have made or lost money.
+STARTING_CASH = 10000.0
+POSITION_SIZE = 1000.0  # dollar amount the bot "spends" per buy signal
+PORTFOLIO_STATE_FILE = "portfolio_state_" + TIMEFRAME + ".json"
+PAPER_TRADES_FILE = "paper_trades_" + TIMEFRAME + ".csv"
+PORTFOLIO_HISTORY_FILE = "portfolio_history_" + TIMEFRAME + ".csv"
+
+if os.path.isfile(PORTFOLIO_STATE_FILE):
+    with open(PORTFOLIO_STATE_FILE, "r") as f:
+        portfolio = json.load(f)
+else:
+    portfolio = {"cash": STARTING_CASH, "positions": {}}  # positions: {symbol: {"shares": x, "avg_price": y}}
+
+latest_prices = {}  # symbol -> latest price, collected for every ticker so we can value the whole portfolio later
 
 # Reliability weight per news source. Well-established financial outlets get a boost,
 # unrecognized/smaller sources get a slight discount. Default (unlisted source) is 1.0.
@@ -68,6 +100,7 @@ for symbol in tickers:
     latest_bb_upper = data['BB_upper'].iloc[-1]
     latest_bb_lower = data['BB_lower'].iloc[-1]
     latest_bb_middle = data['BB_middle'].iloc[-1]
+    latest_prices[symbol] = latest_price
 
     # Regime check: is the market trending or choppy/ranging right now?
     # Compare the 20-day average now vs 10 trading days ago. A big % move = trending, a small move = choppy.
@@ -105,7 +138,6 @@ for symbol in tickers:
         elif latest_price >= latest_bb_upper:
             sell_votes += 1
 
-    news = stock.news
     positive_count = 0
     negative_count = 0
     positive_score = 0
@@ -114,6 +146,7 @@ for symbol in tickers:
     duplicate_count = 0
     tagged_headlines = []
 
+    news = stock.news if not LITE_MODE else []
     for item in news[:5]:
         content = item.get('content', item)
         title = content.get('title', 'No title')
@@ -218,44 +251,45 @@ for symbol in tickers:
     reddit_positive = 0
     reddit_negative = 0
 
-    try:
-        reddit_response = requests.get(
-            "https://www.reddit.com/r/stocks/search.json",
-            params={"q": symbol, "restrict_sr": "on", "sort": "new", "limit": 10, "t": "week"},
-            timeout=10,
-            headers={"User-Agent": "trading-signal-bot/1.0"}
-        )
-        reddit_data = reddit_response.json()
-        posts = reddit_data.get("data", {}).get("children", [])
-        for post in posts[:8]:
-            post_title = post.get("data", {}).get("title", "")
-            if not post_title:
-                continue
-            reddit_verdict_response = requests.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json"
-                },
-                json={
-                    "model": "claude-sonnet-4-5",
-                    "max_tokens": 10,
-                    "messages": [
-                        {"role": "user", "content": "Reddit post title: \"" + post_title + "\". For " + symbol + " stock, reply with ONLY one word: POSITIVE, NEGATIVE, or NEUTRAL."}
-                    ]
-                }
+    if not LITE_MODE:
+        try:
+            reddit_response = requests.get(
+                "https://www.reddit.com/r/stocks/search.json",
+                params={"q": symbol, "restrict_sr": "on", "sort": "new", "limit": 10, "t": "week"},
+                timeout=10,
+                headers={"User-Agent": "trading-signal-bot/1.0"}
             )
-            reddit_result = reddit_verdict_response.json()
-            if 'content' not in reddit_result:
-                continue
-            reddit_verdict = reddit_result['content'][0]['text'].strip().upper()
-            if "POSITIVE" in reddit_verdict:
-                reddit_positive += 1
-            elif "NEGATIVE" in reddit_verdict:
-                reddit_negative += 1
-    except Exception as e:
-        print("Reddit fetch failed for " + symbol + ": " + str(e))
+            reddit_data = reddit_response.json()
+            posts = reddit_data.get("data", {}).get("children", [])
+            for post in posts[:8]:
+                post_title = post.get("data", {}).get("title", "")
+                if not post_title:
+                    continue
+                reddit_verdict_response = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json"
+                    },
+                    json={
+                        "model": "claude-sonnet-4-5",
+                        "max_tokens": 10,
+                        "messages": [
+                            {"role": "user", "content": "Reddit post title: \"" + post_title + "\". For " + symbol + " stock, reply with ONLY one word: POSITIVE, NEGATIVE, or NEUTRAL."}
+                        ]
+                    }
+                )
+                reddit_result = reddit_verdict_response.json()
+                if 'content' not in reddit_result:
+                    continue
+                reddit_verdict = reddit_result['content'][0]['text'].strip().upper()
+                if "POSITIVE" in reddit_verdict:
+                    reddit_positive += 1
+                elif "NEGATIVE" in reddit_verdict:
+                    reddit_negative += 1
+        except Exception as e:
+            print("Reddit fetch failed for " + symbol + ": " + str(e))
 
     if reddit_positive > reddit_negative:
         buy_votes += 1
@@ -282,14 +316,47 @@ for symbol in tickers:
 
     regime_label = "TRENDING" if is_trending else "CHOPPY"
     fomc_note = (" | FOMC in " + str(days_to_next_fomc) + "d") if fomc_soon else ""
-    print(symbol + ": " + final + " (price: $" + str(round(latest_price, 2)) + ", RSI: " + str(round(latest_rsi, 1)) + ", regime: " + regime_label + ", news: " + str(positive_count) + "+/" + str(negative_count) + "- (score " + str(round(positive_score, 1)) + "/" + str(round(negative_score, 1)) + ", " + str(duplicate_count) + " duplicates skipped), stocktwits: " + str(bullish_count) + "bull/" + str(bearish_count) + "bear, reddit: " + str(reddit_positive) + "+/" + str(reddit_negative) + "-, votes: " + str(buy_votes) + "buy/" + str(sell_votes) + "sell" + fomc_note + ")")
+    print("[" + TIMEFRAME + "] " + symbol + ": " + final + " (price: $" + str(round(latest_price, 2)) + ", RSI: " + str(round(latest_rsi, 1)) + ", regime: " + regime_label + ", news: " + str(positive_count) + "+/" + str(negative_count) + "- (score " + str(round(positive_score, 1)) + "/" + str(round(negative_score, 1)) + ", " + str(duplicate_count) + " duplicates skipped), stocktwits: " + str(bullish_count) + "bull/" + str(bearish_count) + "bear, reddit: " + str(reddit_positive) + "+/" + str(reddit_negative) + "-, votes: " + str(buy_votes) + "buy/" + str(sell_votes) + "sell" + fomc_note + (" [LITE MODE]" if LITE_MODE else "") + ")")
+
+    paper_trade_note = None
+
+    if final == "STRONG BUY":
+        already_holding = symbol in portfolio["positions"] and portfolio["positions"][symbol]["shares"] > 0
+        if not already_holding and portfolio["cash"] >= POSITION_SIZE:
+            shares_bought = POSITION_SIZE / latest_price
+            portfolio["cash"] -= POSITION_SIZE
+            portfolio["positions"][symbol] = {"shares": shares_bought, "avg_price": latest_price}
+            paper_trade_note = "BUY " + str(round(shares_bought, 4)) + " shares at $" + str(round(latest_price, 2))
+        elif already_holding:
+            paper_trade_note = "already holding, no new buy"
+        else:
+            paper_trade_note = "not enough paper cash to buy"
+
+    elif final == "STRONG SELL":
+        if symbol in portfolio["positions"] and portfolio["positions"][symbol]["shares"] > 0:
+            held = portfolio["positions"][symbol]
+            proceeds = held["shares"] * latest_price
+            profit = proceeds - (held["shares"] * held["avg_price"])
+            portfolio["cash"] += proceeds
+            paper_trade_note = "SELL " + str(round(held["shares"], 4)) + " shares at $" + str(round(latest_price, 2)) + " (P/L: $" + str(round(profit, 2)) + ")"
+            del portfolio["positions"][symbol]
+        else:
+            paper_trade_note = "no position to sell"
+
+    if paper_trade_note and ("BUY " in paper_trade_note or "SELL " in paper_trade_note):
+        trades_file_exists = os.path.isfile(PAPER_TRADES_FILE)
+        with open(PAPER_TRADES_FILE, "a", newline="") as f:
+            writer = csv.writer(f)
+            if not trades_file_exists:
+                writer.writerow(["date", "symbol", "action", "price", "note", "cash_after"])
+            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), symbol, final, round(latest_price, 2), paper_trade_note, round(portfolio["cash"], 2)])
 
     if "STRONG" in final:
         price_rounded = str(round(latest_price, 2))
         average_rounded = str(round(latest_average, 2))
         rsi_rounded = str(round(latest_rsi, 1))
 
-        log_file = "signal_log.csv"
+        log_file = "signal_log_" + TIMEFRAME + ".csv"
         file_exists = os.path.isfile(log_file)
 
         with open(log_file, "a", newline="") as f:
@@ -317,12 +384,41 @@ for symbol in tickers:
             "days_to_fomc": days_to_next_fomc,
             "buy_votes": buy_votes,
             "sell_votes": sell_votes,
-            "headlines": tagged_headlines
+            "headlines": tagged_headlines,
+            "paper_trade": paper_trade_note
         })
 
-if len(stock_facts_for_email) > 0:
+# ---- Save paper portfolio state and record a snapshot of its total value this run ----
+positions_value = 0.0
+for held_symbol, held_info in portfolio["positions"].items():
+    price_now = latest_prices.get(held_symbol, held_info["avg_price"])  # fall back to buy price if we didn't refresh it this run
+    positions_value += held_info["shares"] * price_now
 
-    facts_text = ""
+total_portfolio_value = portfolio["cash"] + positions_value
+total_return_pct = ((total_portfolio_value - STARTING_CASH) / STARTING_CASH) * 100
+
+with open(PORTFOLIO_STATE_FILE, "w") as f:
+    json.dump(portfolio, f, indent=2)
+
+history_file_exists = os.path.isfile(PORTFOLIO_HISTORY_FILE)
+with open(PORTFOLIO_HISTORY_FILE, "a", newline="") as f:
+    writer = csv.writer(f)
+    if not history_file_exists:
+        writer.writerow(["date", "cash", "positions_value", "total_value", "return_pct", "num_positions"])
+    writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), round(portfolio["cash"], 2), round(positions_value, 2), round(total_portfolio_value, 2), round(total_return_pct, 2), len(portfolio["positions"])])
+
+print("[" + TIMEFRAME + "] Paper portfolio: $" + str(round(total_portfolio_value, 2)) + " total (" + str(round(total_return_pct, 2)) + "% return), cash: $" + str(round(portfolio["cash"], 2)) + ", " + str(len(portfolio["positions"])) + " open position(s)")
+
+# Only the 30-minute run sends an email digest, so the inbox doesn't get hit every 5
+# minutes by four parallel bots. The other timeframes still log every trade and track
+# their own portfolio silently - check the CSV files in the repo to compare them.
+SEND_EMAIL = (TIMEFRAME == "30MIN")
+
+if SEND_EMAIL and len(stock_facts_for_email) > 0:
+
+    facts_text = "PAPER PORTFOLIO (simulated money, started at $" + str(int(STARTING_CASH)) + "):\n"
+    facts_text += "- Total value right now: $" + str(round(total_portfolio_value, 2)) + " (" + ("+" if total_return_pct >= 0 else "") + str(round(total_return_pct, 2)) + "% since start)\n"
+    facts_text += "- Cash on hand: $" + str(round(portfolio["cash"], 2)) + ", open positions: " + str(len(portfolio["positions"])) + "\n"
     for f in stock_facts_for_email:
         facts_text += "\n" + f["symbol"] + ":\n"
         facts_text += "- Signal: " + f["final"] + "\n"
@@ -336,10 +432,13 @@ if len(stock_facts_for_email) > 0:
             facts_text += "- HEADS UP: a Federal Reserve interest rate decision is coming in " + str(f["days_to_fomc"]) + " day(s). This can move the whole market regardless of this stock's own signals.\n"
         facts_text += "- Votes: " + str(f["buy_votes"]) + " buy, " + str(f["sell_votes"]) + " sell (combining price trend, RSI, MACD or Bollinger Bands depending on market regime, news, StockTwits, and Reddit)\n"
         facts_text += "- Sample headlines (tagged with news category and source): " + " | ".join(f["headlines"][:3]) + "\n"
+        if f["paper_trade"]:
+            facts_text += "- Paper trading action taken: " + f["paper_trade"] + "\n"
 
     prompt_text = "You are a friendly, upbeat trading analyst writing a daily email to a friend who is a complete beginner learning to trade. "
     prompt_text += "Here is today's raw data for stocks with strong signals:\n" + facts_text + "\n"
-    prompt_text += "Write an engaging, warm, conversational email. For EACH stock, write a short paragraph (3-4 sentences) explaining in plain English what's happening and why, using the price/RSI/news/StockTwits/Reddit data given. If there's a Fed meeting heads-up, mention it briefly as a reason for extra caution. "
+    prompt_text += "Start with a brief 1-2 sentence mention of the paper portfolio's total value and return since starting, using the PAPER PORTFOLIO data given, framed clearly as simulated/imaginary money, not real trading results. "
+    prompt_text += "Write an engaging, warm, conversational email. For EACH stock, write a short paragraph (3-4 sentences) explaining in plain English what's happening and why, using the price/RSI/news/StockTwits/Reddit data given, and mention the paper trading action taken if one was made. If there's a Fed meeting heads-up, mention it briefly as a reason for extra caution. "
     prompt_text += "Avoid dry lists of numbers, weave the numbers naturally into sentences. Use light personality and enthusiasm, but stay accurate to the data, never invent facts not given. "
     prompt_text += "End the whole email with a section called 'Today's Trading Lesson' that picks ONE concept present in today's data (like RSI, news sentiment, moving averages, MACD, Bollinger Bands, trending vs choppy markets, why news source reliability matters, social media sentiment like Reddit, or how Fed interest rate decisions affect markets) and explains it simply in 3-4 sentences, like a mini trading lesson for a beginner. "
     prompt_text += "Do not give direct financial advice like 'you should buy this'. Keep the total email under 350 words. Do not use markdown formatting, this is a plain text email."
@@ -367,7 +466,7 @@ if len(stock_facts_for_email) > 0:
         email_body = "\n\n".join([f["symbol"] + ": " + f["final"] + " at $" + f["price"] for f in stock_facts_for_email])
 
     msg = MIMEText(email_body)
-    msg['Subject'] = "Trading Bot: " + str(len(stock_facts_for_email)) + " signal(s) today"
+    msg['Subject'] = "Trading Bot (" + TIMEFRAME + "): " + str(len(stock_facts_for_email)) + " signal(s) today"
     msg['From'] = my_email
     msg['To'] = my_email
 
@@ -377,5 +476,7 @@ if len(stock_facts_for_email) > 0:
     server.sendmail(my_email, my_email, msg.as_string())
     server.quit()
     print("Email sent!")
+elif len(stock_facts_for_email) == 0:
+    print("[" + TIMEFRAME + "] No strong signals this run, no email sent.")
 else:
-    print("No strong signals this run, no email sent.")
+    print("[" + TIMEFRAME + "] " + str(len(stock_facts_for_email)) + " signal(s) logged silently (only the 30-minute run emails).")

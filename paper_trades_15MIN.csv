@@ -91,3 +91,4 @@ date,symbol,action,price,note,cash_after
 2026-08-18 05:03,MSFT,STRONG BUY,nan,BUY nan shares at $nan,1966.96
 2026-08-18 05:04,TSLA,STRONG SELL,nan,"SELL 2.9472 shares at $nan (SIGNAL SELL, P/L: $nan)",nan
 2026-08-18 08:05,PLTR,STRONG SELL,nan,"SELL 5.7954 shares at $nan (SIGNAL SELL, P/L: $nan)",nan
+2026-08-18 11:00,NVDA,STRONG SELL,nan,"SELL 4.4403 shares at $nan (SIGNAL SELL, P/L: $nan)",nan

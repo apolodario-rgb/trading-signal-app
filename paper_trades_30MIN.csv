@@ -79,3 +79,4 @@ date,symbol,action,price,note,cash_after
 2026-08-18 03:09,MSFT,STRONG BUY,480.35,BUY 2.0818 shares at $480.35,1896.82
 2026-08-18 05:05,MSFT,STRONG SELL,nan,"SELL 2.0818 shares at $nan (SIGNAL SELL, P/L: $nan)",nan
 2026-08-18 05:05,TSLA,STRONG SELL,nan,"SELL 2.9472 shares at $nan (SIGNAL SELL, P/L: $nan)",nan
+2026-08-18 07:26,PLTR,STRONG SELL,nan,"SELL 5.7849 shares at $nan (SIGNAL SELL, P/L: $nan)",nan

@@ -92,3 +92,7 @@ date,symbol,action,price,note,cash_after
 2026-08-18 05:04,TSLA,STRONG SELL,nan,"SELL 2.9472 shares at $nan (SIGNAL SELL, P/L: $nan)",nan
 2026-08-18 08:05,PLTR,STRONG SELL,nan,"SELL 5.7954 shares at $nan (SIGNAL SELL, P/L: $nan)",nan
 2026-08-18 11:00,NVDA,STRONG SELL,nan,"SELL 4.4403 shares at $nan (SIGNAL SELL, P/L: $nan)",nan
+2026-08-18 14:07,AAPL,STRONG BUY,309.19,"SELL 3.2749 shares at $309.19 (PROFIT TARGET hit, +1.26%, P/L: $12.58)",nan
+2026-08-18 14:10,AMZN,STRONG SELL,258.95,"SELL 3.8269 shares at $258.95 (STOP LOSS hit, -0.9%, P/L: $-9.01)",nan
+2026-08-18 14:10,AMD,STRONG BUY,478.53,"SELL 1.9763 shares at $478.53 (STOP LOSS hit, -5.43%, P/L: $-54.29)",nan
+2026-08-18 14:11,COIN,STRONG SELL,147.29,"SELL 6.637 shares at $147.29 (STOP LOSS hit, -2.24%, P/L: $-22.43)",nan

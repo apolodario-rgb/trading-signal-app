@@ -2037,3 +2037,6 @@ date,symbol,signal,price,average_5day,rsi,regime,macd,macd_signal,bb_upper,bb_lo
 2026-08-29 05:00,GOOGL,STRONG BUY,nan,nan,28.2,CHOPPY,-2.307,-1.994,nan,nan,0,0,0,0,0,10,0,0,0,17,2,1
 2026-08-29 05:00,AMZN,STRONG BUY,nan,nan,23.7,CHOPPY,1.796,3.143,nan,nan,0,0,0,0,0,10,0,0,0,17,2,1
 2026-08-29 05:00,COIN,STRONG SELL,nan,nan,74.3,CHOPPY,7.007,3.414,nan,nan,0,0,0,0,0,11,3,0,0,17,1,2
+2026-08-29 05:11,GOOGL,STRONG BUY,nan,nan,28.2,CHOPPY,-2.307,-1.994,nan,nan,0,0,0,0,0,10,0,0,0,17,2,1
+2026-08-29 05:11,AMZN,STRONG BUY,nan,nan,23.7,CHOPPY,1.796,3.143,nan,nan,0,0,0,0,0,10,0,0,0,17,2,1
+2026-08-29 05:11,COIN,STRONG SELL,nan,nan,74.3,CHOPPY,7.007,3.414,nan,nan,0,0,0,0,0,11,3,0,0,17,1,2

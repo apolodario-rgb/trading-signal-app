@@ -3244,3 +3244,4 @@ date,symbol,signal,price,average_5day,rsi,regime,macd,macd_signal,bb_upper,bb_lo
 2026-09-02 23:50,COIN,STRONG BUY,174.96,181.85,59.1,TRENDING,6.568,5.184,199.72,132.4,0,0,0,0,0,12,2,0,0,13,2,1
 2026-09-03 00:17,AAPL,STRONG SELL,nan,nan,73.6,CHOPPY,1.268,0.063,nan,nan,0,0,0,0,0,6,4,0,0,12,1,2
 2026-09-03 00:55,AAPL,STRONG SELL,nan,nan,73.6,CHOPPY,1.268,0.063,nan,nan,0,0,0,0,0,7,3,0,0,12,1,2
+2026-09-03 01:09,AAPL,STRONG SELL,nan,nan,73.6,CHOPPY,1.268,0.063,nan,nan,0,0,0,0,0,8,3,0,0,12,1,2

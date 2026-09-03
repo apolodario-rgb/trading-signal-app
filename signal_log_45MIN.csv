@@ -3245,3 +3245,4 @@ date,symbol,signal,price,average_5day,rsi,regime,macd,macd_signal,bb_upper,bb_lo
 2026-09-03 00:17,AAPL,STRONG SELL,nan,nan,73.6,CHOPPY,1.268,0.063,nan,nan,0,0,0,0,0,6,4,0,0,12,1,2
 2026-09-03 00:55,AAPL,STRONG SELL,nan,nan,73.6,CHOPPY,1.268,0.063,nan,nan,0,0,0,0,0,7,3,0,0,12,1,2
 2026-09-03 01:09,AAPL,STRONG SELL,nan,nan,73.6,CHOPPY,1.268,0.063,nan,nan,0,0,0,0,0,8,3,0,0,12,1,2
+2026-09-03 01:52,AAPL,STRONG SELL,nan,nan,73.6,CHOPPY,1.268,0.063,nan,nan,0,0,0,0,0,10,4,0,0,12,1,2

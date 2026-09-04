@@ -3590,3 +3590,5 @@ date,symbol,signal,price,average_5day,rsi,regime,macd,macd_signal,bb_upper,bb_lo
 2026-09-04 04:52,AMD,STRONG BUY,nan,nan,27.9,CHOPPY,-9.145,-8.284,nan,nan,0,0,0,0,0,14,2,0,0,11,2,1
 2026-09-04 05:10,AAPL,STRONG SELL,nan,nan,72.9,CHOPPY,1.952,0.55,nan,nan,0,0,0,0,0,6,3,0,0,11,1,2
 2026-09-04 05:10,AMD,STRONG BUY,nan,nan,27.9,CHOPPY,-9.145,-8.284,nan,nan,0,0,0,0,0,14,2,0,0,11,2,1
+2026-09-04 05:51,AAPL,STRONG SELL,nan,nan,72.9,CHOPPY,1.952,0.55,nan,nan,0,0,0,0,0,6,3,0,0,11,1,2
+2026-09-04 05:51,AMD,STRONG BUY,nan,nan,27.9,CHOPPY,-9.145,-8.284,nan,nan,0,0,0,0,0,15,2,0,0,11,2,1

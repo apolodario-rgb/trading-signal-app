@@ -10890,3 +10890,5 @@ date,symbol,signal,price,average_5day,rsi,regime,macd,macd_signal,bb_upper,bb_lo
 2026-09-10 00:49,META,STRONG SELL,nan,nan,85.2,CHOPPY,3.948,-1.753,nan,nan,0,0,0,0,0,6,5,0,0,5,1,2
 2026-09-10 01:01,GOOGL,STRONG SELL,nan,nan,43.6,CHOPPY,-2.983,-2.73,nan,nan,0,0,0,0,0,5,6,0,0,5,0,2
 2026-09-10 01:01,META,STRONG SELL,nan,nan,85.2,CHOPPY,3.948,-1.753,nan,nan,0,0,0,0,0,5,5,0,0,5,0,2
+2026-09-10 01:19,GOOGL,STRONG SELL,nan,nan,43.6,CHOPPY,-2.983,-2.73,nan,nan,0,0,0,0,0,4,8,0,0,5,0,2
+2026-09-10 01:19,META,STRONG SELL,nan,nan,85.2,CHOPPY,3.948,-1.753,nan,nan,0,0,0,0,0,5,6,0,0,5,0,3
